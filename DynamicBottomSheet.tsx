@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useState } from "react";
-import { BackHandler, Dimensions, Keyboard, TouchableWithoutFeedback, View } from "react-native";
+import { BackHandler, Dimensions, Keyboard, KeyboardAvoidingView, TouchableWithoutFeedback, View } from "react-native";
 import { PanGestureHandler } from "react-native-gesture-handler";
 import Animated, {
 	Extrapolation,
@@ -36,7 +36,7 @@ const DynamicBottomSheet = ({
 	handlerBackgroundStyle?: any;
 }) => {
 	const [index, setIndex] = useState(0);
-	// const [keyboardHeight, setKeyboardHeight] = useState(0);
+	const [keyboardHeight, setKeyboardHeight] = useState(0);
 	const screenHeight = Dimensions.get("window").height;
 	const [snapPoints, setPoints] = useState<number[]>([]);
 	const getSnapPoint = (list: (number | string)[]) =>
@@ -65,16 +65,16 @@ const DynamicBottomSheet = ({
 	const eventHandler = useAnimatedGestureHandler({
 		onStart: (event, context, isCanceld) => {
 			console.log("start", event, context, isCanceld);
-			const a = screenHeight - event.absoluteY;
+			const a = screenHeight - event.absoluteY - keyboardHeight;
 			panY.value = screenHeight < a ? screenHeight : a;
 		},
 		onActive: (event, context, isCanceld) => {
-			const a = screenHeight - event.absoluteY;
+			const a = screenHeight - event.absoluteY - keyboardHeight;
 			panY.value = screenHeight < a ? screenHeight : a;
 		},
 		onFinish: (event, context, isCanceld) => {
 			console.log("onFinish", event, context, isCanceld, screenHeight);
-			const a = screenHeight - event.absoluteY;
+			const a = screenHeight - event.absoluteY - keyboardHeight;
 			let q = 0;
 			if ((event.velocityY > 0 && event.velocityY >= screenHeight) || a < (snapPoints[0] / 3) * 2) {
 				runOnJS(closeBottomSheet)();
@@ -107,7 +107,20 @@ const DynamicBottomSheet = ({
 	const closeModal = () => {
 		closeBottomSheet();
 	};
-	const test = () => {};
+
+	useEffect(() => {
+		if (keyboardHeight == 0) {
+			if (panY.value != snapPoints[index]) {
+				panY.value = snapPoints[index];
+			}
+		} else {
+			console.log("q", index, snapPoints[index ?? 0], keyboardHeight);
+			if (snapPoints[index ?? 0] + keyboardHeight > screenHeight) {
+				const q = snapPoints[index ?? 0] - keyboardHeight;
+				panY.value = q;
+			}
+		}
+	}, [keyboardHeight]);
 
 	useLayoutEffect(() => {
 		navigation.setOptions({
@@ -129,36 +142,31 @@ const DynamicBottomSheet = ({
 			}
 			return true;
 		});
-		// const b = Keyboard.addListener("keyboardDidShow", (event) => {
-		// 	console.log("q", index, snapPoints[index ?? 0], event.endCoordinates.height);
-		// 	if (snapPoints[index ?? 0] + event.endCoordinates.height > screenHeight) {
-		// 		const q = snapPoints[index ?? 0] - event.endCoordinates.height;
-		// 		panY.value = withTiming(q, { duration: 300 }, (fin) => {
-		// 			if (fin) {
-		// 				runOnJS(setKeyboardHeight)(event.endCoordinates.height);
-		// 			}
-		// 		});
-		// 	}
-		// });
-		// const c = Keyboard.addListener("keyboardDidHide", (event) => {
-		// 	panY.value = withTiming(snapPoints[index ?? 0], { duration: 300 }, (fin) => {
-		// 		if (fin) {
-		// 			runOnJS(setKeyboardHeight)(0);
-		// 		}
-		// 	});
-		// });
+		const b = Keyboard.addListener("keyboardDidShow", (event) => {
+			setKeyboardHeight(event.endCoordinates.height);
+		});
+		const c = Keyboard.addListener("keyboardDidHide", (event) => {
+			runOnJS(setKeyboardHeight)(0);
+		});
 		return () => {
 			a.remove();
-			// b.remove();
-			// c.remove();
+			b.remove();
+			c.remove();
 		};
 	}, []);
 
 	const animatedStyle = useAnimatedStyle(() => {
-		const 투명도 = interpolate(panY.value, [0, screenHeight], [1, 0.1], {
+		const 투명도 = interpolate(panY.value, [0, screenHeight - keyboardHeight], [1, 0.1], {
 			extrapolateRight: Extrapolation.CLAMP
 		});
-		return { backgroundColor: `rgba(0,0,0, ${1 - 투명도})`, position: "absolute", width: "100%", height: "100%", top: 0, left: 0 };
+		return {
+			backgroundColor: `rgba(0,0,0, ${1 - 투명도})`,
+			position: "absolute",
+			width: "100%",
+			height: "100%",
+			top: 0,
+			left: 0
+		};
 	});
 
 	const bottomSheetStyle = useAnimatedStyle(() => {
@@ -182,16 +190,18 @@ const DynamicBottomSheet = ({
 						}}
 					/>
 				</TouchableWithoutFeedback>
-				<Animated.View style={bottomSheetStyle}>
-					<View style={{ justifyContent: "center", alignItems: "center" }}>
-						<PanGestureHandler onGestureEvent={eventHandler}>
-							<Animated.View style={handlerBackgroundStyle}>
-								<Animated.View style={handlerStyle} />
-							</Animated.View>
-						</PanGestureHandler>
-					</View>
-					<View style={containerStyle}>{children}</View>
-				</Animated.View>
+				<KeyboardAvoidingView>
+					<Animated.View style={bottomSheetStyle}>
+						<View style={{ justifyContent: "center", alignItems: "center" }}>
+							<PanGestureHandler onGestureEvent={eventHandler}>
+								<Animated.View style={handlerBackgroundStyle}>
+									<Animated.View style={handlerStyle} />
+								</Animated.View>
+							</PanGestureHandler>
+						</View>
+						<View style={containerStyle}>{children}</View>
+					</Animated.View>
+				</KeyboardAvoidingView>
 			</View>
 		</Animated.View>
 	);
